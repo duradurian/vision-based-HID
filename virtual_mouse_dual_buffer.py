@@ -11,9 +11,12 @@ import math
 import time
 
 # global constants 
-global_scale = 2
+global_scale = 1
 screen_width = 1920
 screen_height = 1080
+
+def midpoint(point_x, point_y, point_2x, point_2y):
+    return int((point_x+point_2x)//2),int((point_y+point_2y)//2)
 
 async def main():
     # grabs screen resolution
@@ -123,9 +126,8 @@ async def main():
                             
             # draws line between index and thumb, adds distance on midpoint of line
             cv2.line(frame, (int(index_x), int(index_y)), (int(thumb_x), int(thumb_y)), (255, 0, 0), 3)
-            line_midpoint_x = (index_x+thumb_x) // 2
-            line_midpoint_y = (index_y+thumb_y) // 2
-            cv2.putText(frame, f"Distance: {round(index_thumb_distance)}", (int(line_midpoint_x), int(line_midpoint_y)), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 255), 2, cv2.LINE_AA)
+            line_midpoint = midpoint(index_x,index_y,thumb_x,thumb_y)
+            cv2.putText(frame, f"Distance: {round(index_thumb_distance)}", line_midpoint, cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 255), 2, cv2.LINE_AA)
     
         new_frame_time = time.time()
         
@@ -141,7 +143,7 @@ async def main():
         
         # final output!!!
         cv2.namedWindow("Virtual Mouse", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("Virtual Mouse", int(1920), int(1080))
+        cv2.resizeWindow("Virtual Mouse", int(1920/global_scale), int(1080/global_scale))
         cv2.imshow('Virtual Mouse', frame)
         frame_number += 1
         
