@@ -14,6 +14,7 @@ import time
 global_scale = 1
 screen_width = 1920
 screen_height = 1080
+show_window = False
 
 def midpoint(point_x, point_y, point_2x, point_2y):
     return int((point_x+point_2x)//2),int((point_y+point_2y)//2)
@@ -24,7 +25,7 @@ async def main():
     print(f"screen width, height: {screen_width}, {screen_height}")
 
     print("Loading CV2...")
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, int(1920/global_scale))
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, int(1080/global_scale))
     print("Done!")
@@ -123,28 +124,31 @@ async def main():
                                 pyautogui.mouseUp()
                         except:
                             print('error: attempted to click')
-                            
-            # draws line between index and thumb, adds distance on midpoint of line
-            cv2.line(frame, (int(index_x), int(index_y)), (int(thumb_x), int(thumb_y)), (255, 0, 0), 3)
-            line_midpoint = midpoint(index_x,index_y,thumb_x,thumb_y)
-            cv2.putText(frame, f"Distance: {round(index_thumb_distance)}", line_midpoint, cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 255), 2, cv2.LINE_AA)
-    
+
+            if show_window:               
+                # draws line between index and thumb, adds distance on midpoint of line
+                cv2.line(frame, (int(index_x), int(index_y)), (int(thumb_x), int(thumb_y)), (255, 0, 0), 3)
+                line_midpoint = midpoint(index_x,index_y,thumb_x,thumb_y)
+                cv2.putText(frame, f"Distance: {round(index_thumb_distance)}", line_midpoint, cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 255), 2, cv2.LINE_AA)
+        
         new_frame_time = time.time()
         
         # FPS calculator
         fps = 1/(new_frame_time-prev_frame_time)
         prev_frame_time = new_frame_time
         
-        # Status indicators in THIS ORDER: FPS, Index cord, thumb cord, click stat
-        cv2.putText(frame, f"Index finger: {index_x}, {index_y}", (int(50), int(50)), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 255), 2, cv2.LINE_AA)
-        cv2.putText(frame, f"Thumb finger: {thumb_x}, {thumb_y}", (int(50), int(90)), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 255), 2, cv2.LINE_AA)
-        cv2.putText(frame, f"Click status: {status_message}", (int(50), int(130)), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 255), 2, cv2.LINE_AA)
-        cv2.putText(frame, f"fps: {int(fps)}", (50, 180), cv2.FONT_HERSHEY_PLAIN, 3, (0,0,255), 2, cv2.LINE_AA)
-        
-        # final output!!!
-        cv2.namedWindow("Virtual Mouse", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("Virtual Mouse", int(1920/global_scale), int(1080/global_scale))
-        cv2.imshow('Virtual Mouse', frame)
+        if show_window:
+            # Status indicators in THIS ORDER: FPS, Index cord, thumb cord, click stat
+            cv2.putText(frame, f"Index finger: {index_x}, {index_y}", (int(50), int(50)), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, f"Thumb finger: {thumb_x}, {thumb_y}", (int(50), int(90)), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, f"Click status: {status_message}", (int(50), int(130)), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.putText(frame, f"fps: {int(fps)}", (50, 180), cv2.FONT_HERSHEY_PLAIN, 3, (0,0,255), 2, cv2.LINE_AA)
+            
+            # final output!!!
+            cv2.namedWindow("Virtual Mouse", cv2.WINDOW_NORMAL)
+            cv2.resizeWindow("Virtual Mouse", int(1920/global_scale), int(1080/global_scale))
+            cv2.imshow('Virtual Mouse', frame)
+
         frame_number += 1
         
         if cv2.waitKey(1) & 0xFF == ord('q'):
