@@ -19,10 +19,29 @@ show_window = False
 pyautogui.PAUSE = 0
 pyautogui.FAILSAFE = False
 
+# global variables
+click_status = 0
+
 def midpoint(point_x, point_y, point_2x, point_2y):
     return int((point_x+point_2x)//2),int((point_y+point_2y)//2)
 
+def click_mechanics(index_thumb_distance):
+    global click_status
+    
+    if index_thumb_distance < 150 and click_status == 0:
+        click_status = 1
+        pyautogui.mouseDown()
+        print(F"click dist: {index_thumb_distance}")
+        return
+
+    elif index_thumb_distance > 150:
+        click_status = 0
+        pyautogui.mouseUp()
+    
+    
 async def main():
+    global click_status
+    
     print(f"screen width, height: {screen_width}, {screen_height}")
 
     print("Loading CV2...")
@@ -68,9 +87,6 @@ async def main():
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         output = hand_detector.process(rgb_frame)
         hands = output.multi_hand_landmarks
-        
-        # mouse click status
-        status_message = ""
 
         if hands:
             for hand in hands:
@@ -93,7 +109,7 @@ async def main():
                         thumb_y = screen_height / frame_height * y
                         
                         # cursor moving algorithm 
-                        if abs(index_y - thumb_y) > 100:
+                        if abs(index_y - thumb_y) > 160:
                             old_cursor_x_1 = previous_mouse_pos_1[0]
                             old_cursor_y_1 = previous_mouse_pos_1[1]
                             
@@ -113,15 +129,8 @@ async def main():
                         # Pythagorean theorem to calculate distance between thumb and index
                         index_thumb_distance = math.sqrt(abs(index_y-thumb_y)**2+abs(index_x-thumb_x)**2)
                         
-                        try:
-                            if index_thumb_distance < 60 and index_thumb_distance > 14:
-                                pyautogui.mouseDown()
-                                status_message = "left click!"
-                                print(F"click dist: {index_thumb_distance}")
-                            else:
-                                pyautogui.mouseUp()
-                        except:
-                            print('error: attempted to click')
+                        # Trigger click mechanics
+                        click_mechanics(index_thumb_distance)
 
             if show_window and global_scale == 1:
                 # draws line between index and thumb, adds distance on midpoint of line
@@ -139,7 +148,7 @@ async def main():
             # Status indicators in THIS ORDER: FPS, Index cord, thumb cord, click stat
             cv2.putText(frame, f"Index finger: {index_x}, {index_y}", (int(50/global_scale), int(50/global_scale)), cv2.FONT_HERSHEY_SIMPLEX, 1.3/global_scale, (0, 0, 255), 1, cv2.LINE_AA)
             cv2.putText(frame, f"Thumb finger: {thumb_x}, {thumb_y}", (int(50/global_scale), int(90/global_scale)), cv2.FONT_HERSHEY_SIMPLEX, 1.3/global_scale, (0, 0, 255), 1, cv2.LINE_AA)
-            cv2.putText(frame, f"Click status: {status_message}", (int(50/global_scale), int(130/global_scale)), cv2.FONT_HERSHEY_SIMPLEX, 1.3/global_scale, (0, 0, 255), 1, cv2.LINE_AA)
+            cv2.putText(frame, f"Click status: {click_status}", (int(50/global_scale), int(130/global_scale)), cv2.FONT_HERSHEY_SIMPLEX, 1.3/global_scale, (0, 0, 255), 1, cv2.LINE_AA)
             cv2.putText(frame, f"fps: {int(fps)}", (int(50//global_scale), int(180/global_scale)), cv2.FONT_HERSHEY_PLAIN, 3/global_scale, (0,0,255), 1, cv2.LINE_AA)
             
             # final output!!!
