@@ -21,7 +21,7 @@ window_start_scale = 2
 screen_width = 1920
 screen_height = 1080
 show_window = True
-click_mechanic_aceleration_threshold = 1.6
+click_mechanic_aceleration_threshold = 55 # 50-100 are good for a camera w/ motion blur
 WINDOW_NAME = "Virtual Mouse: q(exit), w(hide/show stats), e(zero dist. dragging), r(RGB 4on/off)"
 pyautogui.PAUSE = 0
 pyautogui.FAILSAFE = False
@@ -88,7 +88,10 @@ async def main():
     
     drawing_utils = mp.solutions.drawing_utils
 
+    # Other variables
     color = (120, 255, 255)
+
+    start_time = time.time()
     
     frame_number = 0
 
@@ -104,8 +107,7 @@ async def main():
     previous_mouse_pos_1 = [0,0]
     previous_mouse_pos_2 = [0,0]
     
-    previous_lower_palm_pos2 = (0,0)
-    previous_lower_palm_pos1 = (0,0)
+    previous_lower_palm_pos = (0,0)
 
     relative_lower_palm_aceleration_display = 0
     
@@ -146,13 +148,6 @@ async def main():
                         lower_palm_x = screen_width / frame_width * x
                         lower_palm_y = screen_height / frame_height * y
                         
-                        # CAPTURE A SAMPLE EVERY 2 FRAMES
-                        if frame_number % 2 == 0:
-                            previous_lower_palm_pos2 = (lower_palm_x, lower_palm_y)
-                            
-                        else:
-                            previous_lower_palm_pos1 = (lower_palm_x, lower_palm_y)
-                        
                     # INDEX THUMB
                     if id == 8:
                         cv2.circle(frame, center=(x, y), radius=30//global_scale, color=(0, 255, 0)) # green pointer
@@ -190,11 +185,13 @@ async def main():
                 cv2.putText(frame, f"Palm Distance Recip.: {round((palm_distance_reciprocal),4)}", palm_line_midpoint, cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 255), 2, cv2.LINE_AA)
 
             # Aceleration metrics
-            average_lower_palm_pos = ((previous_lower_palm_pos2[0] + previous_lower_palm_pos1[0])/2, (previous_lower_palm_pos2[1] + previous_lower_palm_pos1[1])/2)
-            relative_lower_palm_aceleration = ptp_distance(average_lower_palm_pos, (lower_palm_x,lower_palm_y)) * palm_distance_reciprocal * 40
+            relative_lower_palm_aceleration = ptp_distance(previous_lower_palm_pos, (lower_palm_x,lower_palm_y)) * palm_distance_reciprocal * 300
             
+            # set new previous lower palm position
+            previous_lower_palm_pos = (lower_palm_x, lower_palm_y)
+
             # TRIGGER MOVING MECHANICS AND AVERAGING MECH IF ACELERATION AND DRAGGING THRESHOLD MET
-            if relative_palm_index_thumb_distance > dragging_threshold and relative_lower_palm_aceleration > 0.4:
+            if relative_palm_index_thumb_distance > dragging_threshold and relative_lower_palm_aceleration > 3.2:
                 old_cursor_x_1 = previous_mouse_pos_1[0]
                 old_cursor_y_1 = previous_mouse_pos_1[1]
                 
@@ -232,6 +229,7 @@ async def main():
         
         # FPS calculator
         fps = 1/(new_frame_time-prev_frame_time)
+        fps_average = frame_number/(time.time()-start_time)
         prev_frame_time = new_frame_time
         
         if show_window:
@@ -251,7 +249,7 @@ async def main():
                 cv2.putText(frame, f"Index finger: {index_x}, {index_y}", (int(50/global_scale), int(50/global_scale)), cv2.FONT_HERSHEY_SIMPLEX, 1.3/global_scale, color, text_size, cv2.LINE_AA)
                 cv2.putText(frame, f"Thumb finger: {thumb_x}, {thumb_y}", (int(50/global_scale), int(90/global_scale)), cv2.FONT_HERSHEY_SIMPLEX, 1.3/global_scale, color, text_size, cv2.LINE_AA)
                 cv2.putText(frame, f"Click status: {click_status}", (int(50/global_scale), int(130/global_scale)), cv2.FONT_HERSHEY_SIMPLEX, 1.3/global_scale, color, text_size, cv2.LINE_AA)
-                cv2.putText(frame, f"fps: {int(fps)}", (int(50//global_scale), int(180/global_scale)), cv2.FONT_HERSHEY_PLAIN, 3/global_scale, color, text_size, cv2.LINE_AA)
+                cv2.putText(frame, f"FPS (live, average): {round(fps)}, {round((fps_average),2)}", (int(50//global_scale), int(180/global_scale)), cv2.FONT_HERSHEY_PLAIN, 3/global_scale, color, text_size, cv2.LINE_AA)
                 cv2.putText(frame, f"Aceleration (relative unit/2s): {round((relative_lower_palm_aceleration_display),2)}", (int(50//global_scale), int(230/global_scale)),cv2.FONT_HERSHEY_PLAIN, 3/global_scale, color, text_size, cv2.LINE_AA)
                 cv2.putText(frame, f"Zero dist. dragging: {zero_distance_dragging}", (int(50//global_scale), int(280/global_scale)),cv2.FONT_HERSHEY_PLAIN, 3/global_scale, color, text_size, cv2.LINE_AA)
                 cv2.putText(frame, f"RGB: {rgb_stat}", (int(50//global_scale), int(330/global_scale)),cv2.FONT_HERSHEY_PLAIN, 3/global_scale, color, text_size, cv2.LINE_AA)
