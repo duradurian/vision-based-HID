@@ -74,9 +74,13 @@ async def main():
     print(f"screen width, height: {screen_width}, {screen_height}")
 
     print("Loading CV2...")
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, int(1920/global_scale))
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, int(1080/global_scale))
+    fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
+    cap = cv2.VideoCapture()
+    cap.open(0, cv2.CAP_DSHOW)
+    cap.set(cv2.CAP_PROP_FOURCC, fourcc)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+    cap.set(cv2.CAP_PROP_FPS, 60)
     print("Done!")
 
     if not cap.isOpened():
@@ -84,7 +88,10 @@ async def main():
         exit()
 
     # media pipe utlities
-    mp_hands = mp.solutions.hands.Hands(max_num_hands = 1)
+    mp_hands = mp.solutions.hands.Hands(model_complexity = 0, 
+                                        max_num_hands=1,
+                                        min_detection_confidence=0.5,
+                                        min_tracking_confidence=0.5)
     
     drawing_utils = mp.solutions.drawing_utils
 
@@ -278,9 +285,7 @@ async def main():
         
         if key == ord('r'):
             rgb_stat = not rgb_stat
-            
-        elif cv2.getWindowProperty(WINDOW_NAME,cv2.WND_PROP_VISIBLE) < 1:        
-            break    
+        
             
     cap.release()
     cv2.destroyAllWindows()
