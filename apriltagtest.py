@@ -1,7 +1,7 @@
 import cv2 as cv2
 import math
 
-def main()
+def main():
     dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_16h5)
     parameters =  cv2.aruco.DetectorParameters()
     detector = cv2.aruco.ArucoDetector(dictionary, parameters)
