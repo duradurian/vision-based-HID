@@ -6,82 +6,34 @@ September 2023: ADDED AVERAGING BUFFER TO INCREASE SMOOTHENING AND INCREASE HAND
 DECEMBER 2023: ADDED RELATIVE DISTANCE CLICKING TO COMPENSTE FOR PIXEL DISTANCE CLICKING BY ADDING A RELATIVE LINE (UPPER TO LOWER PALM)
 DECEMBER 2023: ADDED SPECTRUM CYCLING STATS!!!
 '''
+
 import cv2
 import mediapipe as mp
 import pyautogui
 import asyncio
-import math
 import time
-import numpy as np
 
-# global constants
-# screen_width, screen_height = pyautogui.size()
-global_scale = 1
-window_start_scale = 2
-screen_width = 1920
-screen_height = 1080
-show_window = True
-click_mechanic_aceleration_threshold = 55 # 50-100 are good for a camera w/ motion blur
+import gui
+import helper_functions
+
+GLOBAL_SCALE = 1
+WINDOW_START_SCALE = 2
+SCREEN_WIDTH = 1920
+SCREEN_HEIGHT = 1080
+SHOW_WINDOW = False
+CLICK_ACELERATION_THRESHOLD = 35 # 50-100 are good for a camera w/ mildish motion blur. 15-50 for a good webcam 
+CLICK_DISTANCE = 120
 WINDOW_NAME = "Virtual Mouse: q(exit), w(hide/show stats), e(zero dist. dragging), r(RGB 4on/off)"
+
+# Set pyautogui settings
 pyautogui.PAUSE = 0
 pyautogui.FAILSAFE = False
-click_distance = 120
-
-# global variables
-click_status = 0
-zero_distance_dragging = False
-show_stats = True
-rgb_stat = True
-
-def generate_spectrum_color(color, speed):
-    # Convert color to HSV
-    hsv = cv2.cvtColor(np.uint8([[color]]), cv2.COLOR_BGR2HSV)[0][0]
-
-    # Update hue based on speed
-    hsv[0] = (hsv[0] + speed) % 180
-
-    # Convert back to BGR
-    new_color = cv2.cvtColor(np.uint8([[hsv]]), cv2.COLOR_HSV2BGR)[0][0]
-
-    return tuple(map(int, new_color))
-
-def midpoint(point_x, point_y, point_2x, point_2y):
-    return int((point_x+point_2x)//2),int((point_y+point_2y)//2)
-
-def click_mechanics(distance):
-    global click_status
-    
-    if distance < click_distance and click_status == 0:
-        click_status = 1
-        pyautogui.mouseDown()
-        # print(F"click dist: {distance}")
-        return
-
-    elif distance > 100:
-        click_status = 0
-        pyautogui.mouseUp()
-    
-def ptp_distance(point1: tuple, point2: tuple):
-    # Pythagorean theorem to calculate distance between thumb and index
-    return math.sqrt((point1[0]-point2[0])**2 + (point1[1]-point2[1])**2)
 
 async def main():
-    global click_status
-    global show_stats
-    global zero_distance_dragging
-    global rgb_stat
     
-    print(f"screen width, height: {screen_width}, {screen_height}")
-
-    print("Loading CV2...")
-    fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
+    # Initiate cv2
     cap = cv2.VideoCapture()
-    cap.open(0, cv2.CAP_DSHOW)
-    cap.set(cv2.CAP_PROP_FOURCC, fourcc)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-    cap.set(cv2.CAP_PROP_FPS, 60)
-    print("Done!")
+    helper_functions.set_opencv(cap, cv2, SCREEN_WIDTH, SCREEN_HEIGHT)
 
     if not cap.isOpened():
         print("Error: Could not open camera.")
@@ -92,34 +44,26 @@ async def main():
                                         max_num_hands=1,
                                         min_detection_confidence=0.5,
                                         min_tracking_confidence=0.5)
-    
     drawing_utils = mp.solutions.drawing_utils
 
-    # Other variables
-    color = (120, 255, 255)
-
-    start_time = time.time()
+    # Class instances
+    fps_instance = gui.FPS(start_time = time.time())
     
-    frame_number = 0
-
-    index_y = 0
-    index_x = 0
-
-    thumb_x = 0
-    thumb_y = 0
-
-    prev_frame_time = 0
-    new_frame_time = 0
-
+    # Operation variables
+    zero_distance_dragging = False
+    show_stats = True
+    rgb_stat = True
+    click_status = 0
+    color = (120, 255, 255)
+    index = [0, 0]
+    thumb = [0, 0]
     previous_mouse_pos_1 = [0,0]
     previous_mouse_pos_2 = [0,0]
-    
     previous_lower_palm_pos = (0,0)
-
-    relative_lower_palm_aceleration_display = 0
+    relative_lower_palm_aceleration = 0
     
     while True:
-        new_frame_time = time.time()
+        fps_instance.new_frame()
         
         ret, frame = cap.read()
 
@@ -130,10 +74,15 @@ async def main():
         frame = cv2.flip(frame, 1)
         frame_height, frame_width, _ = frame.shape
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        output = mp_hands.process(rgb_frame)
+        output = mp_hands.process(rgb_frame)      
         hands = output.multi_hand_landmarks
-
+        handType = None
+        
         if hands:
+            
+            # Hand type
+            for hand in output.multi_handedness:
+                handType = hand.classification[0].label
             
             for hand in hands:
                 drawing_utils.draw_landmarks(frame, hand)
@@ -142,106 +91,83 @@ async def main():
                     x = int(landmark.x * frame_width)
                     y = int(landmark.y * frame_height)
                     
-                    # UPPER LOWER PALM
+                    # UPPER PALM
                     if id == 17:
-                        cv2.circle(frame, center=(x, y), radius=30//global_scale, color=(255, 0, 0)) # blue pointer
+                        cv2.circle(frame, center=(x, y), radius=30//GLOBAL_SCALE, color=(0, 255, 0)) # blue pointer
+                        upper_palm = [SCREEN_WIDTH / frame_width * x, SCREEN_HEIGHT / frame_height * y]
+                    
+                    # Pinky finger
+                    if id == 20:
+                        pinky = [SCREEN_WIDTH / frame_width * x, SCREEN_HEIGHT / frame_height * y]
                         
-                        upper_palm_x = screen_width / frame_width * x
-                        upper_palm_y = screen_height / frame_height * y
-                        
+                    # LOWER PALM
                     if id == 0:
-                        cv2.circle(frame, center=(x, y), radius=30//global_scale, color=(255, 0, 0)) # blue pointer
+                        cv2.circle(frame, center=(x, y), radius=30//GLOBAL_SCALE, color=(255, 0, 0)) # blue pointer
+                        lower_palm = [SCREEN_WIDTH / frame_width * x, SCREEN_HEIGHT / frame_height * y]
                         
-                        lower_palm_x = screen_width / frame_width * x
-                        lower_palm_y = screen_height / frame_height * y
-                        
-                    # INDEX THUMB
+                    # INDEX
                     if id == 8:
-                        cv2.circle(frame, center=(x, y), radius=30//global_scale, color=(0, 255, 0)) # green pointer
-                        
-                        index_x = screen_width / frame_width * x
-                        index_y = screen_height / frame_height * y
-            
+                        cv2.circle(frame, center=(x, y), radius=30//GLOBAL_SCALE, color=(255, 0, 0)) # green pointer
+                        index = [SCREEN_WIDTH / frame_width * x, SCREEN_HEIGHT / frame_height * y]
+
+                    # THUMB
                     if id == 4: 
-                        cv2.circle(frame, center=(x, y), radius=10//global_scale, color=(255, 0, 0)) # smaller red pointer
+                        cv2.circle(frame, center=(x, y), radius=10//GLOBAL_SCALE, color=(255, 0, 0)) # smaller red pointer
                         
-                        thumb_x = screen_width / frame_width * x
-                        thumb_y = screen_height / frame_height * y
+                        thumb = [SCREEN_WIDTH / frame_width * x, SCREEN_HEIGHT / frame_height * y]
                         
-                        # Distance from index to thumb (pythagorean)
-                        index_thumb_distance = ptp_distance((thumb_x,thumb_y), (index_x, index_y))
-                        
-                        # cursor moving algorithm and threshold setter
-                        if zero_distance_dragging == True:
-                            dragging_threshold = 0
-                        else:
-                            dragging_threshold = 100
+                        index_thumb_distance = helper_functions.ptp_distance((thumb[0],thumb[1]), (index[0], index[1]))
             
-            palm_distance_reciprocal = 1/ptp_distance((lower_palm_x,lower_palm_y),(upper_palm_x,upper_palm_y))
+            palm_distance_reciprocal = 1/helper_functions.ptp_distance((lower_palm[0],lower_palm[1]),(upper_palm[0],upper_palm[1]))
             relative_palm_index_thumb_distance = index_thumb_distance*palm_distance_reciprocal*300
                                 
-            if show_window and global_scale == 1:
+            if SHOW_WINDOW and GLOBAL_SCALE == 1:
                 # draws line between index and thumb, adds distance on midpoint of line
-                cv2.line(frame, (int(index_x), int(index_y)), (int(thumb_x), int(thumb_y)), (255, 0, 0), 3)
-                thumb_index_line_midpoint = midpoint(index_x,index_y,thumb_x,thumb_y)
+                cv2.line(frame, (int(index[0]), int(index[1])), (int(thumb[0]), int(thumb[1])), (255, 0, 0), 3)
+                thumb_index_line_midpoint = helper_functions.midpoint(index[0],index[1],thumb[0],thumb[1])
                 cv2.putText(frame, f"Relative ThumbIndex: {round((relative_palm_index_thumb_distance),3)}", thumb_index_line_midpoint, cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 255), 2, cv2.LINE_AA)
                 
                 # draws line between upper and lower palm
-                cv2.line(frame, (int(lower_palm_x), int(lower_palm_y)), (int(upper_palm_x), int(upper_palm_y)), (255, 0, 0), 3)
-                palm_line_midpoint = midpoint(lower_palm_x,lower_palm_y,upper_palm_x,upper_palm_y)
+                cv2.line(frame, (int(lower_palm[0]), int(lower_palm[1])), (int(upper_palm[0]), int(upper_palm[1])), (255, 0, 0), 3)
+                palm_line_midpoint = helper_functions.midpoint(lower_palm[0],lower_palm[1],upper_palm[0],upper_palm[1])
                 cv2.putText(frame, f"Palm Distance Recip.: {round((palm_distance_reciprocal),4)}", palm_line_midpoint, cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 255), 2, cv2.LINE_AA)
 
             # Aceleration metrics
-            relative_lower_palm_aceleration = ptp_distance(previous_lower_palm_pos, (lower_palm_x,lower_palm_y)) * palm_distance_reciprocal * 300
+            relative_lower_palm_aceleration = helper_functions.ptp_distance(previous_lower_palm_pos, (lower_palm[0],lower_palm[1])) * palm_distance_reciprocal * 300
             
             # set new previous lower palm position
-            previous_lower_palm_pos = (lower_palm_x, lower_palm_y)
+            previous_lower_palm_pos = (lower_palm[0], lower_palm[1])
 
             # TRIGGER MOVING MECHANICS AND AVERAGING MECH IF ACELERATION AND DRAGGING THRESHOLD MET
-            if relative_palm_index_thumb_distance > dragging_threshold and relative_lower_palm_aceleration > 3.2:
-                old_cursor_x_1 = previous_mouse_pos_1[0]
-                old_cursor_y_1 = previous_mouse_pos_1[1]
+            if zero_distance_dragging == True:
+                dragging_threshold = 0
+            else:
+                dragging_threshold = 100
+            
+            if relative_palm_index_thumb_distance > dragging_threshold and relative_lower_palm_aceleration > 5.2:
+
+                calc_cursor_x = (upper_palm[0]+previous_mouse_pos_1[0]+previous_mouse_pos_2[0])/3
+                calc_cursor_y = (upper_palm[1]+previous_mouse_pos_1[1]+previous_mouse_pos_2[1])/3
                 
-                old_cursor_x_2 = previous_mouse_pos_2[0]
-                old_cursor_y_2 = previous_mouse_pos_2[1]
-
-                calc_cursor_x = (index_x+old_cursor_x_1+old_cursor_x_2)/3
-                calc_cursor_y = (index_y+old_cursor_y_1+old_cursor_y_2)/3
                 pyautogui.moveTo(calc_cursor_x, calc_cursor_y)
-
-                if frame_number % 2 == 0:
+                
+                # Set previous mouse positions (1 and 2) for every even and odd frame
+                if fps_instance.get_frame_number() % 2 == 0:
                     previous_mouse_pos_2 = [calc_cursor_x,calc_cursor_y]
                 else:
                     previous_mouse_pos_1 = [calc_cursor_x,calc_cursor_y]
             
             # Trigger clicking mechanic if aceleration metrics are met
-            if relative_lower_palm_aceleration < click_mechanic_aceleration_threshold:
-                click_mechanics(relative_palm_index_thumb_distance)
+            if relative_lower_palm_aceleration < CLICK_ACELERATION_THRESHOLD:
+                click_status = helper_functions.click_mechanics(relative_palm_index_thumb_distance, CLICK_DISTANCE, click_status)
                 
-            if frame_number % 2:
-                relative_lower_palm_aceleration_display = relative_lower_palm_aceleration
-        
-            with open("metrics1.txt", "a") as metricsdoc1:
-                metricsdoc1.write(str(index_thumb_distance) + "\n")
-                
-            with open("metrics2.txt", "a") as metricsdoc2:
-                metricsdoc2.write(str(relative_palm_index_thumb_distance) + "\n")
-                
-
         elif click_status == 1:
             # Stop clicking when hands aren't in frame
-            click_mechanics(click_distance+1)
+            click_status = helper_functions.click_mechanics(CLICK_DISTANCE+1, CLICK_DISTANCE, click_status)
         
-        new_frame_time = time.time()
-        
-        # FPS calculator
-        fps = 1/(new_frame_time-prev_frame_time)
-        fps_average = frame_number/(time.time()-start_time)
-        prev_frame_time = new_frame_time
-        
-        if show_window:
+        if SHOW_WINDOW:
             
-            if global_scale == 1:
+            if GLOBAL_SCALE == 1:
                 text_size = 2
             else:
                 text_size = 1
@@ -250,27 +176,20 @@ async def main():
                 
                 if rgb_stat == True:
                     # Spectrum cycles text :)
-                    color = generate_spectrum_color(color, 3)
+                    color = gui.generate_spectrum_color(color, 3)
                 
                 # Status indicators in THIS ORDER: FPS, Index cord, thumb cord, click stat, hand relative distance from camera
-                cv2.putText(frame, f"Index finger: {index_x}, {index_y}", (int(50/global_scale), int(50/global_scale)), cv2.FONT_HERSHEY_SIMPLEX, 1.3/global_scale, color, text_size, cv2.LINE_AA)
-                cv2.putText(frame, f"Thumb finger: {thumb_x}, {thumb_y}", (int(50/global_scale), int(90/global_scale)), cv2.FONT_HERSHEY_SIMPLEX, 1.3/global_scale, color, text_size, cv2.LINE_AA)
-                cv2.putText(frame, f"Click status: {click_status}", (int(50/global_scale), int(130/global_scale)), cv2.FONT_HERSHEY_SIMPLEX, 1.3/global_scale, color, text_size, cv2.LINE_AA)
-                cv2.putText(frame, f"FPS (live, average): {round(fps)}, {round((fps_average),2)}", (int(50//global_scale), int(180/global_scale)), cv2.FONT_HERSHEY_PLAIN, 3/global_scale, color, text_size, cv2.LINE_AA)
-                cv2.putText(frame, f"Aceleration (relative unit/2s): {round((relative_lower_palm_aceleration_display),2)}", (int(50//global_scale), int(230/global_scale)),cv2.FONT_HERSHEY_PLAIN, 3/global_scale, color, text_size, cv2.LINE_AA)
-                cv2.putText(frame, f"Zero dist. dragging: {zero_distance_dragging}", (int(50//global_scale), int(280/global_scale)),cv2.FONT_HERSHEY_PLAIN, 3/global_scale, color, text_size, cv2.LINE_AA)
-                cv2.putText(frame, f"RGB: {rgb_stat}", (int(50//global_scale), int(330/global_scale)),cv2.FONT_HERSHEY_PLAIN, 3/global_scale, color, text_size, cv2.LINE_AA)
+                fps, fps_average = fps_instance.calc_fps()
+                gui.show_stats(frame, index[0], index[1], GLOBAL_SCALE, thumb[0], thumb[1], color, text_size, click_status, fps, fps_average, zero_distance_dragging, relative_lower_palm_aceleration, rgb_stat, handType)
 
             # final output!!!
             cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
 
-            if frame_number == 0:
-                cv2.resizeWindow(WINDOW_NAME, int(screen_width/window_start_scale), int(screen_height/window_start_scale))
+            if fps_instance.get_frame_number() == 0:
+                cv2.resizeWindow(WINDOW_NAME, int(SCREEN_WIDTH/WINDOW_START_SCALE), int(SCREEN_HEIGHT/WINDOW_START_SCALE))
                 print('Scaled CV2 Window Size!')
 
             cv2.imshow(WINDOW_NAME, frame)
-
-        frame_number += 1
         
         key = cv2.waitKey(1) & 0xFF
         
@@ -286,6 +205,7 @@ async def main():
         if key == ord('r'):
             rgb_stat = not rgb_stat
         
+        fps_instance.new_frame(add_frame_count = True)
             
     cap.release()
     cv2.destroyAllWindows()
