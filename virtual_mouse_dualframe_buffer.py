@@ -24,6 +24,7 @@ SHOW_WINDOW = True
 CLICK_ACELERATION_THRESHOLD = 35 # 50-100 are good for a camera w/ mildish motion blur. 15-50 for a good webcam 
 CLICK_DISTANCE = 120
 WINDOW_NAME = "Virtual Mouse: q(exit), w(hide/show stats), e(zero dist. dragging), r(RGB 4on/off)"
+MOVEMENT_AVERAGES = 5
 
 # Set pyautogui settings
 pyautogui.PAUSE = 0
@@ -57,10 +58,12 @@ async def main():
     color = (120, 255, 255)
     index = [0, 0]
     thumb = [0, 0]
-    previous_mouse_pos_1 = [0,0]
-    previous_mouse_pos_2 = [0,0]
+    previous_mouse_pos_ls = []
     previous_lower_palm_pos = (0,0)
     relative_lower_palm_aceleration = 0
+    
+    for i in range(MOVEMENT_AVERAGES):
+        previous_mouse_pos_ls.append((0,0))
     
     while True:
         fps_instance.new_frame()
@@ -70,7 +73,7 @@ async def main():
         if not ret:
             print("Error: Could not read frame.")
             break
-
+        
         frame = cv2.flip(frame, 1)
         frame_height, frame_width, _ = frame.shape
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -144,18 +147,22 @@ async def main():
             else:
                 dragging_threshold = 100
             
+            # MOVEMENT MECH
             if relative_palm_index_thumb_distance > dragging_threshold and relative_lower_palm_aceleration > 5.2:
-
-                calc_cursor_x = (upper_palm[0]+previous_mouse_pos_1[0]+previous_mouse_pos_2[0])/3
-                calc_cursor_y = (upper_palm[1]+previous_mouse_pos_1[1]+previous_mouse_pos_2[1])/3
                 
-                pyautogui.moveTo(calc_cursor_x, calc_cursor_y)
+                previous_mouse_pos_ls.append(upper_palm)
+                previous_mouse_pos_ls.pop(0)
+            
+                average_x = 0
+                average_y = 0
+                for i in range(-1, -MOVEMENT_AVERAGES-1, -1):
+                    average_x += previous_mouse_pos_ls[i][0]
+                    average_y += previous_mouse_pos_ls[i][1]
+                average_x /= MOVEMENT_AVERAGES
+                average_y /= MOVEMENT_AVERAGES
                 
-                # Set previous mouse positions (1 and 2) for every even and odd frame
-                if fps_instance.get_frame_number() % 2 == 0:
-                    previous_mouse_pos_2 = [calc_cursor_x,calc_cursor_y]
-                else:
-                    previous_mouse_pos_1 = [calc_cursor_x,calc_cursor_y]
+                # print(average_x, average_y)            
+                pyautogui.moveTo(average_x, average_y)
             
             # Trigger clicking mechanic if aceleration metrics are met
             if relative_lower_palm_aceleration < CLICK_ACELERATION_THRESHOLD:
