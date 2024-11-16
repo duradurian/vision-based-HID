@@ -7,3 +7,5 @@ dependancies
 - asyncio -> 3.4.3
 - math
 - time
+
+A bunch of spaghetti code works though! Powered by 3 am boredom.
